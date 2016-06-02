@@ -1,0 +1,127 @@
+#################################
+#
+# Policy for testing overlayfs file system support
+#
+
+# Domain for mounter process.
+type test_overlay_mounter_t, testdomain;
+domain_type(test_overlay_mounter_t)
+
+# Domain for client process.
+type test_overlay_client_t, testdomain;
+domain_type(test_overlay_client_t)
+
+type test_overlay_files_ro_t;
+files_type(test_overlay_files_ro_t)
+
+type test_overlay_files_rwx_t;
+files_type(test_overlay_files_rwx_t)
+
+type test_overlay_files_noaccess_t;
+files_type(test_overlay_files_noaccess_t)
+
+#
+# Mounter policy
+#
+allow test_overlay_mounter_t self:dir list_dir_perms;
+allow test_overlay_mounter_t self:file read_file_perms;
+allow test_overlay_mounter_t self:capability { sys_admin dac_override dac_read_search };
+
+unconfined_runs_test(test_overlay_mounter_t)
+
+kernel_search_proc(test_overlay_mounter_t)
+kernel_read_proc_symlinks(test_overlay_mounter_t)
+
+fs_relabelfrom_xattr_fs(test_overlay_mounter_t)
+fs_mount_xattr_fs(test_overlay_mounter_t)
+
+corecmd_shell_entry_type(test_overlay_mounter_t)
+corecmd_exec_bin(test_overlay_mounter_t)
+
+userdom_read_inherited_user_tmp_files(test_overlay_mounter_t)
+userdom_search_admin_dir(test_overlay_mounter_t)
+
+mount_exec(test_overlay_mounter_t)
+mount_rw_pid_files(test_overlay_mounter_t)
+
+files_search_all(test_overlay_mounter_t)
+
+fs_getattr_xattr_fs(test_overlay_mounter_t)
+
+selinux_getattr_fs(test_overlay_mounter_t)
+
+#
+# Mounter needs to be able to mount on r/o and r/w/x directories and files
+# relabelfrom/relableto can probably be removed if fscreate fixes work.
+#
+allow test_overlay_mounter_t test_overlay_files_ro_t:file mounton;
+allow test_overlay_mounter_t test_overlay_files_rwx_t:{dir file} mounton;
+allow test_overlay_mounter_t test_overlay_files_rwx_t:filesystem { mount relabelfrom relabelto };
+allow test_overlay_mounter_t test_overlay_files_rwx_t:file { relabelfrom relabelto };
+
+#
+# Mounter should be allowed to search/read r/o directories and files
+#
+list_dirs_pattern(test_overlay_mounter_t, test_overlay_files_ro_t, test_overlay_files_ro_t)
+read_files_pattern(test_overlay_mounter_t, test_overlay_files_ro_t, test_overlay_files_ro_t)
+read_lnk_files_pattern(test_overlay_mounter_t, test_overlay_files_ro_t, test_overlay_files_ro_t)
+allow test_overlay_mounter_t test_overlay_files_ro_t:dir mounton;
+allow test_overlay_mounter_t test_overlay_files_rwx_t:filesystem unmount;
+
+#
+# Mounter should be allowed to create/search/read r/w/x directories and files
+#
+manage_files_pattern(test_overlay_mounter_t, test_overlay_files_rwx_t, test_overlay_files_rwx_t)
+manage_dirs_pattern(test_overlay_mounter_t, test_overlay_files_rwx_t, test_overlay_files_rwx_t)
+manage_lnk_files_pattern(test_overlay_mounter_t, test_overlay_files_rwx_t, test_overlay_files_rwx_t)
+
+#
+# Mounter needs to search test_file_t directory and execute tests
+#
+allow test_overlay_mounter_t test_file_t:dir search_dir_perms;
+can_exec(test_overlay_mounter_t, test_file_t)
+
+#
+# Client policy
+#
+allow test_overlay_client_t self:dir list_dir_perms;
+allow test_overlay_client_t self:file read_file_perms;
+
+unconfined_runs_test(test_overlay_client_t)
+mcs_constrained(test_overlay_client_t)
+
+corecmd_shell_entry_type(test_overlay_client_t)
+corecmd_entrypoint_all_executables(test_overlay_client_t)
+corecmd_exec_bin(test_overlay_client_t)
+
+kernel_search_proc(test_overlay_client_t)
+kernel_read_proc_symlinks(test_overlay_client_t)
+
+userdom_read_inherited_user_tmp_files(test_overlay_client_t)
+userdom_search_admin_dir(test_overlay_client_t)
+
+fs_getattr_xattr_fs(test_overlay_client_t)
+
+selinux_getattr_fs(test_overlay_client_t)
+
+#
+# client should be allowed to search/read/execute r/o directories and files
+#
+read_files_pattern(test_overlay_client_t, test_overlay_files_ro_t, test_overlay_files_ro_t)
+list_dirs_pattern(test_overlay_client_t, test_overlay_files_ro_t, test_overlay_files_ro_t)
+read_lnk_files_pattern(test_overlay_client_t, test_overlay_files_ro_t, test_overlay_files_ro_t)
+can_exec(test_overlay_client_t, test_overlay_files_ro_t)
+
+#
+# Client should be allowed to execute/write/search/read r/w/x directories and files
+#
+manage_files_pattern(test_overlay_client_t, test_overlay_files_rwx_t, test_overlay_files_rwx_t)
+manage_dirs_pattern(test_overlay_client_t, test_overlay_files_rwx_t, test_overlay_files_rwx_t)
+manage_lnk_files_pattern(test_overlay_client_t, test_overlay_files_rwx_t, test_overlay_files_rwx_t)
+can_exec(test_overlay_client_t, test_overlay_files_rwx_t)
+
+#
+# Client needs to search test_file_t directory and execute tests
+#
+allow test_overlay_client_t test_file_t:dir search_dir_perms;
+can_exec(test_overlay_client_t,test_file_t)
