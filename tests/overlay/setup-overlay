@@ -1,0 +1,51 @@
+#/bin/bash
+#set -x
+
+BASEDIR=$1
+CONTEXT=$2
+
+setup () {
+    # Create and populate the lower directory.
+    # This would be e.g. a Fedora image in the container scenario.
+    mkdir -p $BASEDIR/lower/readdir $BASEDIR/lower/writedir $BASEDIR/lower/noaccessdir
+    echo read > $BASEDIR/lower/readfile
+    echo write > $BASEDIR/lower/writefile
+    echo noaccess > $BASEDIR/lower/noaccessfile
+
+    # Label the lower directory with a type readable but not writable by
+    # containers.  I just picked a type from base_ro_file_type.
+    chcon -R -t test_overlay_files_ro_t $BASEDIR/lower
+    chcon -t test_overlay_files_noaccess_t $BASEDIR/lower/noaccessfile $BASEDIR/lower/noaccessdir
+    # Writefile on lower is writable so that nocontext mount can also trigger
+    # copy up and write.
+    chcon -t test_overlay_files_rwx_t $BASEDIR/lower/writefile $BASEDIR/lower/writedir
+
+    # Create a directory per container.
+    mkdir -p $BASEDIR/container1
+
+    # Create upper, work, and overlay directories per container.
+    mkdir -p $BASEDIR/container1/upper $BASEDIR/container1/work $BASEDIR/container1/merged
+    chcon -R unconfined_u:object_r:test_overlay_files_ro_t:s0:c10,c20 $BASEDIR/container1
+
+    # Label the container directories to match the container context.
+    # This is simply to ensure correct label inheritance on new file
+    # creation and to prevent permission problems when overlayfs
+    # internally creates files on behalf of the current process.
+    chcon -R unconfined_u:object_r:test_overlay_files_rwx_t:s0:c10,c20 $BASEDIR/container1/upper $BASEDIR/container1/work $BASEDIR/container1/merged
+}
+
+# Mount the overlays.
+mount () {
+  local context="$1" context_str=""
+
+  [ -n "$context" ] && context_str="context=\"$context\","
+
+  runcon -t test_overlay_mounter_t bash <<EOF
+  mount -t overlay none -o '${context_str}lowerdir=$BASEDIR/lower,upperdir=$BASEDIR/container1/upper,workdir=$BASEDIR/container1/work' $BASEDIR/container1/merged
+EOF
+}
+
+# Main Script
+[ -z "$BASEDIR" ] && BASEDIR=$PWD
+setup
+mount "$CONTEXT"

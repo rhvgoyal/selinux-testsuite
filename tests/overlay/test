@@ -1,0 +1,140 @@
+#!/usr/bin/perl
+use Test::More;
+
+BEGIN {
+        plan tests => 18;
+}
+
+# Tests
+sub test_1 {
+	print "Attempting to cat readfile should succeed.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 cat $basedir/container1/merged/readfile >/dev/null 2>&1");
+	ok($result eq 0);
+	return;
+}
+
+sub test_2 {
+	print "Attempting to touch noaccessfile, should fail.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 touch $basedir/container1/merged/noaccessfile >/dev/null 2>&1");
+	ok($result);
+	return;
+}
+
+sub test_3 {
+	print "Attempting to cat noaccessfile should fail.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 cat $basedir/container1/merged/noaccessfile > /dev/null 2>&1");
+	ok($result);
+	return;
+}
+
+sub test_4 {
+	print "Attempting to write writefile, should succeed.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 echo appending  >> $basedir/container1/merged/writefile >/dev/null 2>&1");
+	ok($result eq 0);
+	return;
+}
+
+sub test_5 {
+	print "Attempting to create new file touchedfile, should succeed.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 touch $basedir/container1/merged/touchfile >/dev/null 2>&1 ");
+	ok($result eq 0);
+	return;
+}
+
+sub test_6 {
+	print "Attempting to create directory inside writedir should succeed.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 mkdir $basedir/container1/merged/writedir/foo >/dev/null 2>&1");
+	ok($result eq 0);
+	return;
+}
+
+sub test_7 {
+	print "Attempting to create file inside writedir should succeed.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 touch $basedir/container1/merged/writedir/bar >/dev/null 2>&1");
+	ok($result eq 0);
+	return;
+}
+
+sub test_8 {
+	print "Attempting to create file inside readdir should fail.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 touch $basedir/container1/merged/readdir/bar >/dev/null 2>&1");
+	ok($result);
+	return;
+}
+
+# For context mounts, attempt to create file inside readdir should succeed.
+# Copy up will take place and readdir will have a writable label on upper
+# And dir creation should succeed.
+sub test_8_ctx {
+	print "Attempting to create file inside readdir should succeed.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 touch $basedir/container1/merged/readdir/bar >/dev/null 2>&1");
+	ok($result eq 0);
+	return;
+}
+
+sub test_9 {
+	print "Attempting to change directory to noaccessdir should fail.\n";
+	$result = system ("runcon -t test_overlay_client_t -l s0:c10,c20 cd $basedir/container1/merged/noaccessdir/bar >/dev/null 2>&1");
+	ok($result);
+	return;
+}
+
+$basedir = $0;  $basedir =~ s|(.*)/[^/]*|$1|;
+
+# Cleanup lefover
+
+system ("$basedir/cleanup-overlay $basedir");
+
+print "=====================================================\n";
+print "Testing mounting overlayfs without context switch\n";
+print "=====================================================\n\n";
+
+# Setup Overlay for non-context mounts.
+if (system ("$basedir/setup-overlay $basedir") == 0) {
+	print "Mounted overlay without context.\n";
+} else {
+	print "setup-overlay failed. Cleaning up.\n";
+	system "$basedir/cleanup-overlay $basedir";
+	exit;
+}
+
+test_1();
+test_2();
+test_3();
+test_4();
+test_5();
+test_6();
+test_7();
+test_8();
+test_9();
+
+# Run tests again with context mounts
+system "$basedir/cleanup-overlay $basedir";
+$context="unconfined_u:object_r:test_overlay_files_rwx_t:s0:c10,c20";
+print "\n\n=====================================================\n";
+print "Testing mounting overlayfs with context switch\n";
+print "context=$context\n";
+print "=====================================================\n\n";
+
+if (system ("$basedir/setup-overlay $basedir '$context'") == 0) {
+        print "Mounted overlay with context=$context.\n";
+} else {
+        print "setup-overlay failed. Cleaning up.\n";
+        system "$basedir/cleanup-overlay $basedir";
+        exit;
+}
+
+test_1();
+test_2();
+test_3();
+test_4();
+test_5();
+test_6();
+test_7();
+test_8_ctx();
+test_9();
+
+# Cleanup
+system "$basedir/cleanup-overlay $basedir";
+
+exit;
